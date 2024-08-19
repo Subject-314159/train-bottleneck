@@ -19,4 +19,4 @@ Released versions are tested and should functionally work.
 
 # Acknowledgement
 
-Original mod idea by (Hansjoachim)[https://mods.factorio.com/user/HansJoachim]
+Original mod idea by [Hansjoachim](https://mods.factorio.com/user/HansJoachim)
