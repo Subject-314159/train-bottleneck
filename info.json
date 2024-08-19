@@ -1,0 +1,11 @@
+{
+  "name": "train-bottleneck",
+  "version": "0.1.0",
+  "title": "Train bottleneck",
+  "author": "Subject31415",
+  "factorio_version": "1.1",
+  "dependencies": [
+    "base >= 1.1"
+  ],
+  "description": "Keep track of where your trains travel the most"
+}
