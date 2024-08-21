@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.1.1
+Date: 2024-08-22
+  Features:
+    - Introduced bottleneck visualization to show how much time trains spend on a rail segment
+  Changes:
+    - Algorithm improvements
+---------------------------------------------------------------------------------------------------
 Version: 1.0.0
 Date: 2024-08-18
   Features:

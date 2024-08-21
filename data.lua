@@ -1,6 +1,14 @@
 data:extend({{
     type = "shortcut",
-    name = "tb_shortcut",
+    name = "tb_shortcut-throughput",
+    action = "lua",
+    icon = {
+        filename = "__base__/graphics/icons/locomotive.png",
+        size = 64
+    }
+}, {
+    type = "shortcut",
+    name = "tb_shortcut-bottleneck",
     action = "lua",
     icon = {
         filename = "__base__/graphics/icons/rail.png",
