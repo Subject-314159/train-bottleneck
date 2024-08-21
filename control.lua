@@ -52,6 +52,11 @@ script.on_init(function()
     init()
 end)
 
+script.on_event({defines.events.on_surface_created, defines.events.on_surface_imported}, function(e)
+    -- Call model init to add surface
+    model.init()
+end)
+
 script.on_event(defines.events.on_tick, function(e)
     model.tick_update()
 end)
@@ -61,7 +66,9 @@ script.on_event(defines.events.on_lua_shortcut, function(e)
     if not player then
         return
     end
-    if e.prototype_name == "tb_shortcut" then
+    if e.prototype_name == "tb_shortcut-throughput" then
         view.render(e.player_index, player.surface.index, 10, "throughput")
+    elseif e.prototype_name == "tb_shortcut-bottleneck" then
+        view.render(e.player_index, player.surface.index, 10, "bottleneck")
     end
 end)

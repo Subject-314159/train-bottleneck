@@ -71,7 +71,11 @@ local draw_test_render = function(surface_index)
     end
 end
 
-local render_throughput = function(player_index, surface_index, data)
+local render_throughput = function(player_index, surface_index, data, type)
+    -- Early exit if we did not receive proper data
+    if not data or not data.measurements or not data.measurements.rails then
+        return
+    end
 
     -- Get some variables to work with
     local gs = global.surfaces[surface_index]
@@ -81,11 +85,17 @@ local render_throughput = function(player_index, surface_index, data)
     end
 
     -- Loop through data
-    for id, entry in pairs(data.entries) do
+    for id, entry in pairs(data.measurements.rails) do
 
         -- Calculate red and green fraction
         -- TODO: Convert to HSL->RGB for better color gradient?
-        local fac = entry.total / data.max
+        local fac
+        if type == "throughput" then
+            fac = (entry.throughput or 0) / data.max.throughput
+        else
+            fac = (entry.traveling + entry.waiting_signal + entry.waiting_station) /
+                      (data.max.traveling + data.max.waiting_signal + data.max.waiting_station)
+        end
         local r = math.min(fac * 2, 1)
         local g = math.min((1 - fac) * 2, 1)
 
@@ -164,17 +174,9 @@ view.render = function(player_index, surface_index, history_minutes, type)
         return
     end
 
-    -- Get some variables to work with
-    local minute = math.floor(game.tick / 3600)
-    local first_minute = math.max(minute - history_minutes, 0)
+    local data = model.get_averages(surface_index, history_minutes)
 
-    local data = model.get_averages(type, surface_index, first_minute)
-
-    if type == "throughput" then
-        render_throughput(player_index, surface_index, data)
-    elseif type == "waiting" then
-        render_waiting(player_index, surface_index, data)
-    end
+    render_throughput(player_index, surface_index, data, type)
 end
 
 return view
