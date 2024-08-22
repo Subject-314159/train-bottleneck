@@ -336,7 +336,7 @@ local process_train_waiting_other = function(train, gt)
     if not gtr.error then
         gtr.error = {}
     end
-    gtr.error[minute] = (ggtrtm.error[minute] or 0) + 1
+    gtr.error[minute] = (gtr.error[minute] or 0) + 1
 
 end
 
