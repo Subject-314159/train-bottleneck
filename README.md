@@ -26,7 +26,7 @@ Original mod idea by [Hansjoachim](https://mods.factorio.com/user/HansJoachim)
 # Roadmap
 
 -   Update trail graphics to connect properly
--   Add visualization to indicate stopped train waiting time in block/at signal
+-   Improve visualization to indicate stopped train waiting time in block (currently only in segment)
 -   Optimize performance by throttling updates per tick in order to prevent lag
 -   Add option to choose vizualization time to live
 -   Idea: Graph with throughput in past timeframe for selected area

@@ -2,6 +2,10 @@ local model = require("scripts.model")
 
 local view = {}
 
+----------------------------------------------------------------------------------------------------
+-- Color helpers
+----------------------------------------------------------------------------------------------------
+
 local hsv_to_rgb = function(h, s, v)
     local r, g, b
 
@@ -30,8 +34,35 @@ local hsv_to_rgb = function(h, s, v)
     return r, g, b
 end
 
+---@param factor number Percentage on the scale from 0..1
+---@return table {r,g,b}
+local get_throughput_color = function(factor)
+    -- Factor to hue/saturation
+    -- local hue = (160 / 360) * (1 - factor) + (90 / 360) * factor
+    local hue = (200 / 360) * (1 - factor) + (100 / 360) * factor
+    -- local hue = (120 / 360)
+    -- local r, g, b = hsv_to_rgb(hue, (factor / 2) + 0.5, 0.5)
+
+    -- local r, g, b = hsv_to_rgb(hue, (factor / 2) + 0.5, (factor / 2) + 0.5)
+    -- local r, g, b = hsv_to_rgb(hue, 1, (factor / 2) + 0.5)
+    local r, g, b = hsv_to_rgb(hue, (factor / 2) + 0.5, (factor * 0.25) + 0.75)
+    -- return {r, g, b, (factor / 2) + 0.5}
+    return {r, g, b}
+end
+
+---@param factor integer Percentage on the scale from 0..1
+---@return table {r,g,b}
+local get_waiting_color = function(factor)
+    -- Factor to hue/saturation
+    -- local hue = (40 / 360) * (1 - factor)
+    local hue = (80 / 360) * (1 - factor)
+    local r, g, b = hsv_to_rgb(hue, 1, 1)
+    return {r, g, b}
+end
+
 local draw_test_render = function(surface_index)
     for i = 1, 255, 1 do
+        -- Get some variables
         local fac = i / 255
         local r, g, b
         if fac > 0.5 then
@@ -49,27 +80,45 @@ local draw_test_render = function(surface_index)
             surface = surface_index,
             time_to_live = 10 * 60
         }
+
+        -- Draw saturated scale
         rendering.draw_circle(prop)
 
+        -- Draw old scale
         prop.color = {fac, 1 - fac, 0}
         prop.target = {i / 10, -5.1}
         rendering.draw_circle(prop)
 
+        -- Draw HSV scale
         r, g, b = hsv_to_rgb((120 / 360) - fac * (120 / 360), 1, 1)
 
         prop.color = {r, g, b}
         prop.target = {i / 10, -5.55}
         rendering.draw_circle(prop)
 
+        -- Draw HSV palette
         for s = 1, 255, 1 do
             r, g, b = hsv_to_rgb(fac, 1, s / 255)
 
             prop.color = {r, g, b}
-            prop.target = {i / 10, -7 - (s / 20)}
+            prop.target = {i / 10, -10 - (s / 20)}
             rendering.draw_circle(prop)
         end
+
+        -- Draw new throughput + waiting combined scale
+        if fac > 0.5 then
+            prop.color = get_waiting_color((fac - 0.5) * 2)
+        else
+            prop.color = get_throughput_color(fac * 2)
+        end
+        prop.target = {i / 10, -7}
+        rendering.draw_circle(prop)
     end
 end
+
+----------------------------------------------------------------------------------------------------
+-- Render
+----------------------------------------------------------------------------------------------------
 
 local render_throughput = function(player_index, surface_index, data, type)
     -- Early exit if we did not receive proper data
@@ -87,78 +136,92 @@ local render_throughput = function(player_index, surface_index, data, type)
     -- Loop through data
     for id, entry in pairs(data.measurements.rails) do
 
-        -- Calculate red and green fraction
-        -- TODO: Convert to HSL->RGB for better color gradient?
-        local fac
-        if type == "throughput" then
-            fac = (entry.throughput or 0) / data.max.throughput
+        -- Calculate throughput and waiting factors
+        local fac_tpt = (entry.throughput or 0) / data.max.throughput
+        local fac_wtn_sig = (entry.waiting_signal) / (data.max.waiting_signal)
+        local fac_wtn_stn = (entry.waiting_station) / (data.max.waiting_station)
+
+        -- Get the color according to the correct factor
+        local color
+        if fac_wtn_sig > 0 or fac_wtn_stn > 0 then
+            -- Trains have been waiting at this rail
+            if fac_wtn_sig > fac_wtn_stn then
+                -- We need to get the waiting at signal factor
+                color = get_waiting_color(fac_wtn_sig)
+            else
+                -- We need to get the waiting at station factor
+                color = get_waiting_color(fac_wtn_stn)
+            end
         else
-            fac = (entry.traveling + entry.waiting_signal + entry.waiting_station) /
-                      (data.max.traveling + data.max.waiting_signal + data.max.waiting_station)
+            -- We need to get the throughput factor
+            color = get_throughput_color(fac_tpt)
         end
-        local r = math.min(fac * 2, 1)
-        local g = math.min((1 - fac) * 2, 1)
 
         -- Get all rails on this position
-        local str = srf.find_entities_filtered({
-            position = entry.pos,
-            name = "straight-rail"
-        })
-        for _, rail in pairs(str) do
-            if rail.unit_number == id then
-                local prop = {
-                    tint = {r, g, 0},
-                    target = entry.pos,
-                    surface = srf.index,
-                    time_to_live = 10 * 60
-                }
-                if rail.direction == defines.direction.north or rail.direction == defines.direction.south then
-                    -- Set correct sprite
-                    prop.sprite = "tb_overlay-straight"
-                    -- Rotate by 90 degree
-                    prop.orientation = 0.25
-                elseif rail.direction == defines.direction.east or rail.direction == defines.direction.west then
-                    -- Set correct sprite
-                    prop.sprite = "tb_overlay-straight"
-                else
-                    -- Set correct sprite
-                    prop.sprite = "tb_overlay-diagonal"
-                    -- Rotate by the orientation
-                    prop.orientation = ((rail.direction - 1) / 8) + 0.25
-                end
-                -- Draw the sprite
-                rendering.draw_sprite(prop)
+        -- local str = srf.find_entities_filtered({
+        --     position = entry.pos,
+        --     name = "straight-rail"
+        -- })
+        -- for _, rail in pairs(str) do
+
+        -- Loop through all rails in measurement
+        local ids = {}
+        local uids = {}
+        local rail = entry.entity
+        -- if rail.unit_number == id then
+        if rail.prototype.type == "straight-rail" then
+            table.insert(ids, id)
+            if uids[id] then
+                game.print("double ID used " .. id)
+            else
+                uids[id] = true
             end
-        end
-
-        local cur = srf.find_entities_filtered({
-            position = entry.pos,
-            name = "curved-rail"
-        })
-        for _, rail in pairs(cur) do
-            if rail.unit_number == id then
-                -- Set baseline prop
-                local prop = {
-                    tint = {r, g, 0},
-                    target = entry.pos,
-                    surface = srf.index,
-                    time_to_live = 10 * 60
-                }
-
-                -- Correct orientation
-                if (rail.direction % 2) == 0 then
-                    prop.sprite = "tb_overlay-curved-right"
-                    prop.orientation = ((rail.direction) / 8) - 0.25
-
-                else
-                    prop.sprite = "tb_overlay-curved-left"
-                    prop.orientation = ((rail.direction - 1) / 8) + 0.25
-                end
-
-                -- Draw segment
-                rendering.draw_sprite(prop)
+            local prop = {
+                tint = color,
+                target = entry.pos,
+                surface = srf.index,
+                time_to_live = 10 * 60
+            }
+            if rail.direction == defines.direction.north or rail.direction == defines.direction.south then
+                -- Set correct sprite
+                prop.sprite = "tb_overlay-straight"
+                -- Rotate by 90 degree
+                prop.orientation = 0.25
+            elseif rail.direction == defines.direction.east or rail.direction == defines.direction.west then
+                -- Set correct sprite
+                prop.sprite = "tb_overlay-straight"
+            else
+                -- Set correct sprite
+                prop.sprite = "tb_overlay-diagonal"
+                -- Rotate by the orientation
+                prop.orientation = ((rail.direction - 1) / 8) + 0.25
             end
+            -- Draw the sprite
+            rendering.draw_sprite(prop)
+        elseif rail.prototype.type == "curved-rail" then
+            -- Set baseline prop
+            local prop = {
+                tint = color,
+                target = entry.pos,
+                surface = srf.index,
+                time_to_live = 10 * 60
+            }
+
+            -- Correct orientation
+            if (rail.direction % 2) == 0 then
+                prop.sprite = "tb_overlay-curved-right"
+                prop.orientation = ((rail.direction) / 8) - 0.25
+
+            else
+                prop.sprite = "tb_overlay-curved-left"
+                prop.orientation = ((rail.direction - 1) / 8) + 0.25
+            end
+
+            -- Draw segment
+            rendering.draw_sprite(prop)
+
         end
+        game.print(serpent.line(ids))
     end
 end
 

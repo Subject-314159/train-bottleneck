@@ -66,7 +66,7 @@ script.on_event(defines.events.on_lua_shortcut, function(e)
     if not player then
         return
     end
-    if e.prototype_name == "tb_shortcut-throughput" then
+    if e.prototype_name == "tb_shortcut-throughput" or e.prototype_name == "tb_shortcut" then
         view.render(e.player_index, player.surface.index, 10, "throughput")
     elseif e.prototype_name == "tb_shortcut-bottleneck" then
         view.render(e.player_index, player.surface.index, 10, "bottleneck")

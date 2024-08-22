@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.1.3
+Date: 2024-08-22
+  Features:
+    - Algorithm improvements, again
+    - Added support for modded rails since we now look at the prototype and not the individual rail name
+  Changes:
+    - Reduced to one function to show throughput and waiting combined
+    - Updated color scheme ranging blue-green for throughput and yellow-red for waiting/bottleneck
+---------------------------------------------------------------------------------------------------
 Version: 0.1.2
 Date: 2024-08-22
   Bugfixes:

@@ -1,18 +1,11 @@
 data:extend({{
     type = "shortcut",
-    name = "tb_shortcut-throughput",
+    name = "tb_shortcut",
     action = "lua",
     icon = {
-        filename = "__base__/graphics/icons/locomotive.png",
-        size = 64
-    }
-}, {
-    type = "shortcut",
-    name = "tb_shortcut-bottleneck",
-    action = "lua",
-    icon = {
-        filename = "__base__/graphics/icons/rail.png",
-        size = 64
+        filename = "__train-bottleneck__/graphics/icons/bottleneck.png",
+        size = 64,
+        mipmap_count = 2
     }
 }})
 
