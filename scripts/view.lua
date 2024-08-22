@@ -157,25 +157,10 @@ local render_throughput = function(player_index, surface_index, data, type)
             color = get_throughput_color(fac_tpt)
         end
 
-        -- Get all rails on this position
-        -- local str = srf.find_entities_filtered({
-        --     position = entry.pos,
-        --     name = "straight-rail"
-        -- })
-        -- for _, rail in pairs(str) do
-
         -- Loop through all rails in measurement
-        local ids = {}
-        local uids = {}
         local rail = entry.entity
         -- if rail.unit_number == id then
         if rail.prototype.type == "straight-rail" then
-            table.insert(ids, id)
-            if uids[id] then
-                game.print("double ID used " .. id)
-            else
-                uids[id] = true
-            end
             local prop = {
                 tint = color,
                 target = entry.pos,
@@ -221,7 +206,6 @@ local render_throughput = function(player_index, surface_index, data, type)
             rendering.draw_sprite(prop)
 
         end
-        game.print(serpent.line(ids))
     end
 end
 
@@ -229,7 +213,7 @@ local render_waiting = function(player_index, surface_index, data)
 end
 
 view.render = function(player_index, surface_index, history_minutes, type)
-    -- TMP
+    -- FOR DEBUGGING & TESTING
     -- draw_test_render(surface_index)
 
     -- Check if the render is requested for an existing global surface

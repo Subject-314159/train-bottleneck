@@ -123,17 +123,6 @@ local update_waiting_signal = function(gt, data, filter)
     -- Loop through signals
     for id, prop in pairs(gt.signals) do
         if prop.entity then
-            -- TEMP: Draw red circle around signal
-            local dr = {
-                color = {1, 0, 0},
-                radius = 0.5,
-                width = 3,
-                target = prop.entity.position,
-                surface = prop.entity.surface,
-                time_to_live = 10 * 60
-            }
-            -- rendering.draw_circle(dr)
-
             -- Get all rails in this signal's block
             -- First get the rail this signal belongs to
             local rail
@@ -153,17 +142,6 @@ local update_waiting_signal = function(gt, data, filter)
                         end
                     end
 
-                    -- Draw line between signal and rail to visualize which one it is connected to
-                    local dl = {
-                        color = {1, 1, 1},
-                        width = 1,
-                        from = prop.entity.position,
-                        to = r.position,
-                        surface = r.surface,
-                        time_to_live = 10 * 60
-                    }
-                    -- rendering.draw_line(dl)
-
                     -- Get correct rail piece
                     local rails_corrected = {}
                     if is_outbound then
@@ -171,30 +149,7 @@ local update_waiting_signal = function(gt, data, filter)
                         if not rib[r.unit_number] then
                             rib[r.unit_number] = r
                         end
-
-                        -- TEMP: Draw circle (the correct one) green = found in one go
-                        local dr = {
-                            color = {0, 1, 0},
-                            radius = 0.8,
-                            width = 3,
-                            target = r.position,
-                            surface = r.surface,
-                            time_to_live = 10 * 60
-                        }
-                        -- rendering.draw_circle(dr)
                     else
-
-                        -- TEMP: Draw circle (the correct one) orange circle means wrong segment
-                        local dr = {
-                            color = {1, 0.5, 0},
-                            radius = 0.6,
-                            width = 3,
-                            target = r.position,
-                            surface = r.surface,
-                            time_to_live = 10 * 60
-                        }
-                        -- rendering.draw_circle(dr)
-
                         -- The signal is connected to the wrong side of the rail block
                         -- Loop through directions required for get_connected_rail
                         for _, dir in pairs({defines.rail_direction.front, defines.rail_direction.back}) do
@@ -222,28 +177,6 @@ local update_waiting_signal = function(gt, data, filter)
                                         if not rib[gcr.unit_number] then
                                             rib[gcr.unit_number] = gcr
                                         end
-
-                                        -- TEMP: Draw circle blue = found connected
-                                        local dr = {
-                                            color = {0, 0, 1},
-                                            radius = 0.4,
-                                            width = 3,
-                                            target = gcr.position,
-                                            surface = gcr.surface,
-                                            time_to_live = 10 * 60
-                                        }
-                                        -- rendering.draw_circle(dr)
-
-                                        -- Draw line from rail it came from to rail we found
-                                        local dl = {
-                                            color = {1, 1, 1},
-                                            width = 1,
-                                            from = r.position,
-                                            to = gcr.position,
-                                            surface = r.surface,
-                                            time_to_live = 10 * 60
-                                        }
-                                        -- rendering.draw_line(dl)
                                     end
 
                                 end
@@ -264,17 +197,6 @@ local update_waiting_signal = function(gt, data, filter)
                         if not roi[r.unit_number] then
                             roi[r.unit_number] = r
                         end
-
-                        -- TMP draw line from RIB to ROI
-                        local dl = {
-                            color = {0, 0, 1},
-                            width = 1,
-                            from = entity.position,
-                            to = r.position,
-                            surface = r.surface,
-                            time_to_live = 10 * 60
-                        }
-                        -- rendering.draw_line(dl)
                     end
                 end
             end
@@ -304,19 +226,7 @@ local update_waiting_signal = function(gt, data, filter)
                     end
                 end
 
-                -- TODO: Add data to data.signal[id].waiting (or sth like that)
-
-                -- TMP: Blue dot on all found rails so far
-                local dr = {
-                    color = {0, 0, 1},
-                    radius = 0.2,
-                    width = 3,
-                    filled = true,
-                    target = entity.position,
-                    surface = entity.surface,
-                    time_to_live = 10 * 60
-                }
-                -- rendering.draw_circle(dr)
+                -- TODO: Add signal data to data.signal[id].waiting
             end
         end
     end
@@ -334,17 +244,6 @@ local update_waiting_station = function(gt, data, filter)
             -- First get the rail that belongs to this station
             local rail = prop.entity.connected_rail
             if rail then
-                -- TMP: Green circle on all connected rail
-                local dr = {
-                    color = {0, 1, 0},
-                    radius = 0.5,
-                    width = 3,
-                    target = rail.position,
-                    surface = rail.surface,
-                    time_to_live = 10 * 60
-                }
-                -- rendering.draw_circle(dr)
-
                 -- Make array of rails in block
                 local rib = {}
 
@@ -398,7 +297,7 @@ local update_waiting_station = function(gt, data, filter)
                         end
                     end
 
-                    -- TODO: Add data to data.signal[id].waiting (or sth like that)
+                    -- TODO: Add station data to data.signal[id].waiting
                 end
             end
         end
