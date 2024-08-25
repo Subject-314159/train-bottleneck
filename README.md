@@ -17,11 +17,11 @@ Released versions are tested and should functionally work.
 -   Open a pull request on Github
 -   Report issues/bugs under discussions
 
-# Acknowledgement
-
-Original mod idea by [Hansjoachim](https://mods.factorio.com/user/HansJoachim)
-
 ---
+
+# Known issues
+
+-   Currently not available for multiplayer; Some mod settings are not multiplayer compatible
 
 # Roadmap
 
@@ -32,3 +32,13 @@ Original mod idea by [Hansjoachim](https://mods.factorio.com/user/HansJoachim)
 -   Idea: Graph with throughput in past timeframe for selected area
 -   Idea: GUI with top X bottlenecks & pareto graph with average train stopped waiting time
 -   Idea: Track average waiting time at stations
+
+# Collaborations welcome
+
+-   Start a discussion with your ideas
+-   Open a pull request on Github
+-   Report issues under discussions
+
+# Acknowledgement
+
+-   Original mod idea by [Hansjoachim](https://mods.factorio.com/user/HansJoachim)

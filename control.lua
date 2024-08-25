@@ -62,7 +62,7 @@ script.on_event(defines.events.on_tick, function(e)
 end)
 
 script.on_event(defines.events.on_lua_shortcut, function(e)
-    local player = game.players[e.player_index]
+    local player = game.get_player(e.player_index)
     if not player then
         return
     end
