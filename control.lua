@@ -67,8 +67,33 @@ script.on_event(defines.events.on_lua_shortcut, function(e)
         return
     end
     if e.prototype_name == "tb_shortcut-throughput" or e.prototype_name == "tb_shortcut" then
-        view.render(e.player_index, player.surface.index, 10, "throughput")
-    elseif e.prototype_name == "tb_shortcut-bottleneck" then
-        view.render(e.player_index, player.surface.index, 10, "bottleneck")
+        view.toggle_gui(e.player_index)
     end
+end)
+
+script.on_event(defines.events.on_gui_click, function(e)
+    -- Get the player
+    local player = game.get_player(e.player_index)
+    if not player then
+        return
+    end
+    local el = e.element
+
+    -- Check for our button
+    local name = el.name
+    if name == "tb_show-overlay" then
+        if el.toggled then
+            view.remove_render(e.player_index)
+        else
+            view.render(e.player_index, player.surface.index, 10, "bottleneck")
+        end
+    elseif name == "btn_signal" then
+        if el.tags and el.tags.id then
+            local ent = model.get_global_entity(el.tags.id)
+            player.zoom_to_world(ent.position, 1)
+        else
+            game.print("Signal with ID " .. el.name .. " not found")
+        end
+    end
+
 end)

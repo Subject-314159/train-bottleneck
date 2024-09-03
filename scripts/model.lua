@@ -4,9 +4,79 @@ local get_minute = function()
     return math.floor(game.tick / 3600)
 end
 
+model.get_global_player = function(player_index)
+    if not global.players then
+        global.players = {}
+    end
+    if not global.players[player_index] then
+        global.players[player_index] = {}
+    end
+    local gp = global.players[player_index]
+    return gp
+end
+
+local set_global_entity = function(unit_number, entity)
+    if not global.entities then
+        global.entities = {}
+    end
+    if not entity or not entity.valid then
+        return
+    end
+    if not global.entities[unit_number] then
+        global.entities[unit_number] = entity
+    end
+end
+
+model.get_global_entity = function(unit_number)
+    if not global.entities then
+        return
+    end
+    local entity = global.entities[unit_number]
+    if entity and entity.valid then
+        return entity
+    else
+        global.entities[unit_number] = nil
+    end
+end
+
+model.set_player_overlay_rendering = function(player_index, render_id, unit_number)
+    local gp = model.get_global_player(player_index)
+    if not gp then
+        return
+    end
+    if not gp.rendering then
+        gp.rendering = {}
+    end
+    gp.rendering[render_id] = unit_number
+end
+
+model.get_player_is_rendered = function(player_index)
+    if not global.players or not global.players[player_index] then
+        -- If global player is not set up then return false
+        return false
+    end
+    local gp = global.players[player_index]
+    for k, v in pairs(gp.rendering) do
+        -- We get here if there is at least one entry
+        return true
+    end
+
+    -- Fallback return fale
+    return false
+end
+
+model.get_player_all_renders = function(player_index)
+    if not global.players or not global.players[player_index] then
+        -- If global player is not set up then return false
+        return {}
+    end
+    local gp = global.players[player_index]
+    return gp.rendering or {}
+end
+
 local get_indexed_array = function(array)
     if array then
-        local data = {}
+        lodata = {}
         for _, id in pairs(array) do
             data[id] = true
         end
@@ -68,14 +138,13 @@ local update_throughput = function(gt, data, filter)
     end
 
     -- Loop through rails for throughput
-    for id, prop in pairs(gt.rails) do
+    for rid, prop in pairs(gt.rails) do
         -- Make sure the rail entity is included in the filter (or no rail filter is given)
-        if not filter.rails or filter.rails[id] then
+        if not filter.rails or filter.rails[rid] then
             -- Get data measurement rail id entry
-            if not data.measurements.rails[id] then
-                data.measurements.rails[id] = {
+            if not data.measurements.rails[rid] then
+                data.measurements.rails[rid] = {
                     pos = prop.pos,
-                    entity = prop.entity,
                     throughput = 0,
                     traveling = 0,
                     error = 0,
@@ -83,7 +152,7 @@ local update_throughput = function(gt, data, filter)
                     waiting_station = 0
                 }
             end
-            local dmr = data.measurements.rails[id]
+            local dmr = data.measurements.rails[rid]
 
             -- Sum throughput for this rail entity
             if prop.throughput then
@@ -114,6 +183,182 @@ local update_throughput = function(gt, data, filter)
         end
     end
 end
+local get_rail_in_block_recursive
+get_rail_in_block_recursive = function(rail, rib)
+    -- Early exit if rail is not rail
+    -- local prot = game.entity_prototypes[rail.name]
+    -- if prot and prot.type and (prot.type ~= "straight-rail" and prot.type ~= "curved-rail") then
+    --     return
+    -- end
+
+    -- Get rail segment ends
+    local rse = {}
+    for _, dir in pairs {defines.rail_direction.front, defines.rail_direction.back} do
+
+        -- Get the segment end
+        local seg = rail.get_rail_segment_end(dir)
+
+        if seg then
+            rse[seg.unit_number] = seg
+        end
+    end
+
+    for id, r in pairs(rse) do
+        -- Check front/back for station
+        local has_station = false
+        for _, dir in pairs {defines.rail_direction.front, defines.rail_direction.back} do
+
+            local grse = r.get_rail_segment_entity(dir, true)
+            if grse and game.entity_prototypes[grse.name].type == "train-stop" and grse.connected_rail and
+                grse.connected_rail == r then
+                has_station = true
+            end
+        end
+
+        -- Check if segment is interrupted by a station
+        if not has_station then
+            -- Look further
+            for _, dir in pairs {defines.rail_direction.front, defines.rail_direction.back} do
+
+                for _, condir in pairs({defines.rail_connection_direction.left,
+                                        defines.rail_connection_direction.straight,
+                                        defines.rail_connection_direction.right}) do
+                    -- Get connected rail
+                    local gcr = r.get_connected_rail {
+                        rail_direction = dir,
+                        rail_connection_direction = condir
+                    }
+
+                    if gcr then
+
+                        -- Check if connected rail has station that is not in our segment
+                        local segment_valid = true
+                        for _, cdir in pairs {defines.rail_direction.front, defines.rail_direction.back} do
+                            -- Check if we have a station at the connected rail
+                            local grse = gcr.get_rail_segment_entity(cdir, true)
+                            if grse and game.entity_prototypes[grse.name].type == "train-stop" and
+                                not grse.connected_rail.is_rail_in_same_rail_segment_as(r) then
+                                segment_valid = false
+                            end
+                        end
+
+                        -- Check if the connected rail is in the same block and in a valid segment (i.e. not interrupted by station)
+                        if gcr.is_rail_in_same_rail_block_as(r) and segment_valid then
+                            -- Check if this rail has a station
+
+                            -- Check if this rail is already in our array
+                            if not rib[gcr.unit_number] then
+                                -- e this rail
+                                rib[gcr.unit_number] = gcr
+                                set_global_entity(gcr.unit_number, gcr)
+                                -- Dig deeper
+                                get_rail_in_block_recursive(gcr, rib)
+                            end
+
+                        end
+                    end
+                end
+
+                -- Get & store all rails in current segment
+                for _, seg in pairs(rail.get_rail_segment_rails(dir)) do
+                    -- Safe add to our array
+                    if not rib[seg.unit_number] then
+                        rib[seg.unit_number] = seg
+                        set_global_entity(seg.unit_number, seg)
+                    end
+                end
+            end
+
+        end
+    end
+
+end
+
+local get_signal_rails_in_block = function(signal)
+    -- Make array of rails in block
+    local ris = {}
+
+    -- Loop through all connected rails (orphan signals will return nil)
+    for _, r in pairs(signal.get_connected_rails()) do
+        if r and r.valid then
+            -- First check if we have an inbound or outbound signal
+            local is_outbound = false
+            for _, s in pairs(r.get_outbound_signals()) do
+                -- If we found our signal in the outbound signals of this rail then the rail is in the correct block
+                if s.unit_number == signal.unit_number then
+                    is_outbound = true
+                end
+            end
+
+            -- Get correct rail piece
+            local rails_corrected = {}
+            if is_outbound then
+                -- Safe add to our array because it can be that we meet this rail multiple times
+                if not ris[r.unit_number] then
+                    ris[r.unit_number] = r
+                end
+            else
+                -- The signal is connected to the wrong side of the rail block
+                -- Loop through directions required for get_connected_rail
+                for _, dir in pairs({defines.rail_direction.front, defines.rail_direction.back}) do
+                    for _, condir in pairs({defines.rail_connection_direction.left,
+                                            defines.rail_connection_direction.straight,
+                                            defines.rail_connection_direction.right}) do
+                        -- Get the connected rail
+                        local gcr = r.get_connected_rail {
+                            rail_direction = dir,
+                            rail_connection_direction = condir
+                        }
+                        if gcr then
+                            -- Check for this new connected rail if this block contains our signal as outbound signal
+                            local is_outbound_chain = false
+                            for _, s in pairs(gcr.get_outbound_signals()) do
+                                -- If we found our signal in the outbound signals of this rail then the rail is in the correct block
+                                if s.unit_number == signal.unit_number then
+                                    is_outbound_chain = true
+                                end
+                            end
+
+                            if is_outbound_chain then
+                                -- Ladies and gentlemen, we've got 'em!
+                                -- Safe add to our array because it can be that we meet this rail multiple times
+                                if not ris[gcr.unit_number] then
+                                    ris[gcr.unit_number] = gcr
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- At this point our rail in segment array contains all the rails we are interested in
+    -- Now we need to get all segments connected to these rails and check if they are in the same block
+    local rib = {}
+    for _, r in pairs(ris) do
+        get_rail_in_block_recursive(r, rib)
+    end
+
+    return rib
+
+    -- -- Next we need to all the rails in that segment and add it to our array
+    -- local roi = {}
+    -- for id, entity in pairs(rib) do
+    --     for _, dir in pairs({defines.rail_direction.front, defines.rail_direction.back}) do
+    --         for _, r in pairs(entity.get_rail_segment_rails(dir)) do
+    --             -- TODO near future: we need to recursively find segments because a block consists of multiple segments
+    --             -- Safe add to our array
+    --             if not roi[r.unit_number] then
+    --                 roi[r.unit_number] = r
+    --             end
+    --         end
+    --     end
+    -- end
+
+    -- -- Finally we have all rails in the blocks leading to our signal, return the array
+    -- return roi
+end
 local update_waiting_signal = function(gt, data, filter)
     -- Early exit if this train does not have any signal data yet
     if not gt or not gt.signals then
@@ -121,93 +366,18 @@ local update_waiting_signal = function(gt, data, filter)
     end
 
     -- Loop through signals
-    for id, prop in pairs(gt.signals) do
-        if prop.entity then
+    for sid, prop in pairs(gt.signals) do
+        local entity = model.get_global_entity(sid)
+        if entity then
             -- Get all rails in this signal's block
-            -- First get the rail this signal belongs to
-            local rail
+            local roi = get_signal_rails_in_block(entity)
 
-            -- Make array of rails in block
-            local rib = {}
-
-            -- Loop through all connected rails (orphan signals will return nil)
-            for _, r in pairs(prop.entity.get_connected_rails()) do
-                if r and r.valid then
-                    -- First check if we have an inbound or outbound signal
-                    local is_outbound = false
-                    for _, s in pairs(r.get_outbound_signals()) do
-                        -- If we found our signal in the outbound signals of this rail then the rail is in the correct block
-                        if s.unit_number == prop.entity.unit_number then
-                            is_outbound = true
-                        end
-                    end
-
-                    -- Get correct rail piece
-                    local rails_corrected = {}
-                    if is_outbound then
-                        -- Safe add to our array because it can be that we meet this rail multiple times
-                        if not rib[r.unit_number] then
-                            rib[r.unit_number] = r
-                        end
-                    else
-                        -- The signal is connected to the wrong side of the rail block
-                        -- Loop through directions required for get_connected_rail
-                        for _, dir in pairs({defines.rail_direction.front, defines.rail_direction.back}) do
-                            for _, condir in pairs({defines.rail_connection_direction.left,
-                                                    defines.rail_connection_direction.straight,
-                                                    defines.rail_connection_direction.right}) do
-                                -- Get the connected rail
-                                local gcr = r.get_connected_rail {
-                                    rail_direction = dir,
-                                    rail_connection_direction = condir
-                                }
-                                if gcr then
-                                    -- Check for this new connected rail if this block contains our signal as outbound signal
-                                    local is_outbound_chain = false
-                                    for _, s in pairs(gcr.get_outbound_signals()) do
-                                        -- If we found our signal in the outbound signals of this rail then the rail is in the correct block
-                                        if s.unit_number == prop.entity.unit_number then
-                                            is_outbound_chain = true
-                                        end
-                                    end
-
-                                    if is_outbound_chain then
-                                        -- Ladies and gentlemen, we've got 'em!
-                                        -- Safe add to our array because it can be that we meet this rail multiple times
-                                        if not rib[gcr.unit_number] then
-                                            rib[gcr.unit_number] = gcr
-                                        end
-                                    end
-
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-
-            -- At this point our rail in block array contains all the rails we are interested in
-            -- Next we need to get all the rails in that segment and add it to our array
-            local roi = {}
-            for id, entity in pairs(rib) do
-                for _, dir in pairs({defines.rail_direction.front, defines.rail_direction.back}) do
-                    for _, r in pairs(entity.get_rail_segment_rails(dir)) do
-                        -- TODO near future: we need to recursively find segments because a block consists of multiple segments
-                        -- Safe add to our array
-                        if not roi[r.unit_number] then
-                            roi[r.unit_number] = r
-                        end
-                    end
-                end
-            end
-
-            -- Finally we have all rails in the blocks leading to our signal, next we can add the measurements to the array
+            -- Add the measurements to the array
             for id, entity in pairs(roi) do
                 -- Get data measurement rail id entry
                 if not data.measurements.rails[id] then
                     data.measurements.rails[id] = {
                         pos = prop.pos,
-                        entity = prop.entity,
                         throughput = 0,
                         traveling = 0,
                         error = 0,
@@ -226,7 +396,24 @@ local update_waiting_signal = function(gt, data, filter)
                     end
                 end
 
-                -- TODO: Add signal data to data.signal[id].waiting
+            end
+
+            -- Add signal data to data.signal[id]
+            if prop.waiting then
+                -- Init the array
+                if not data.measurements.signals[sid] then
+                    data.measurements.signals[sid] = {
+                        waiting = 0,
+                        pos = prop.pos
+                    }
+                end
+                local dms = data.measurements.signals[sid]
+                -- Add the waiting time of this signal
+                for min, tick in pairs(prop.waiting) do
+                    if min >= filter.first_minute and min <= filter.last_minute then
+                        dms.waiting_signal = (dms.waiting_signal or 0) + (tick or 0)
+                    end
+                end
             end
         end
     end
@@ -238,37 +425,16 @@ local update_waiting_station = function(gt, data, filter)
     end
 
     -- Loop through stations
-    for id, prop in pairs(gt.stations) do
-        if prop.entity then
+    for sid, prop in pairs(gt.stations) do
+        local entity = model.get_global_entity(sid)
+        if entity then
             -- Get all rails in this station's block
             -- First get the rail that belongs to this station
-            local rail = prop.entity.connected_rail
+            local rail = entity.connected_rail
             if rail then
                 -- Make array of rails in block
                 local rib = {}
-
-                for _, condir in pairs({defines.rail_connection_direction.left,
-                                        defines.rail_connection_direction.straight,
-                                        defines.rail_connection_direction.right}) do
-                    -- Get the connected rail
-                    local gcr = rail.get_connected_rail {
-                        rail_direction = defines.rail_direction.front, -- We only need to get backwards because this is where our train stops
-                        rail_connection_direction = condir
-                    }
-                    -- Check if we got a rail that is in the same block as the rail connected to our station
-                    if gcr and gcr.is_rail_in_same_rail_block_as(rail) then
-                        -- TODO near future: recursively find all segments in this block
-                        -- Find all rail in same segment
-                        for _, dir in pairs({defines.rail_direction.front, defines.rail_direction.back}) do
-                            for _, r in pairs(gcr.get_rail_segment_rails(dir)) do
-                                -- Safe add to our array
-                                if not rib[r.unit_number] then
-                                    rib[r.unit_number] = r
-                                end
-                            end
-                        end
-                    end
-                end
+                get_rail_in_block_recursive(rail, rib)
 
                 -- At this point we have all the rails in our segment (block)
                 -- Now we can add it to the data array
@@ -278,7 +444,6 @@ local update_waiting_station = function(gt, data, filter)
                     if not data.measurements.rails[id] then
                         data.measurements.rails[id] = {
                             pos = prop.pos,
-                            entity = prop.entity,
                             throughput = 0,
                             traveling = 0,
                             error = 0,
@@ -298,6 +463,24 @@ local update_waiting_station = function(gt, data, filter)
                     end
 
                     -- TODO: Add station data to data.signal[id].waiting
+                end
+            end
+
+            -- Add station data to data.signal[id]
+            if prop.waiting then
+                -- Init the array
+                if not data.measurements.stations[sid] then
+                    data.measurements.stations[sid] = {
+                        waiting_station = 0,
+                        pos = prop.pos
+                    }
+                end
+                local dms = data.measurements.stations[sid]
+                -- Add the waiting time of this station
+                for min, tick in pairs(prop.waiting) do
+                    if min >= filter.first_minute and min <= filter.last_minute then
+                        dms.waiting_station = (dms.waiting_station or 0) + (tick or 0)
+                    end
                 end
             end
         end
@@ -326,6 +509,11 @@ model.get_averages = function(surface_index, history_minutes, filter)
             signals = {},
             stations = {}
         },
+        ordered = {
+            rails = {},
+            signals = {},
+            stations = {}
+        },
         max = {
             throughput = 0,
             traveling = 0,
@@ -342,6 +530,41 @@ model.get_averages = function(surface_index, history_minutes, filter)
             update_waiting_signal(gt, data, fltr)
             update_waiting_station(gt, data, fltr)
         end
+    end
+
+    -- Make tables for ordering
+    for id, prop in pairs(data.measurements.rails) do
+        local p = {
+            id = id,
+            throughput = prop.throughput
+        }
+        table.insert(data.ordered.rails, prop)
+    end
+
+    -- Sort rails by throughput
+    table.sort(data.ordered.rails, function(left, right)
+        return left.throughput > right.throughput
+    end)
+
+    -- Sort signals & stations by waiting
+    for _, type in pairs({"signal", "station"}) do
+        local tbl = data.measurements[type .. "s"]
+        local ord = data.ordered[type .. "s"]
+        local arr = {}
+        for id, prop in pairs(tbl) do
+            -- if prop["waiting_" .. type] and prop["waiting_" .. type] > 0 then
+            local p = {
+                id = id,
+                waiting = prop["waiting_" .. type] or 0
+            }
+            -- prop.id = id
+            table.insert(ord, p)
+            -- end
+        end
+        table.sort(ord, function(left, right)
+            return left.waiting > right.waiting
+        end)
+        ord = arr
     end
 
     -- Calculate max
@@ -364,22 +587,23 @@ end
 --                 traveling = ticks,
 --                 waiting_signal = ticks,
 --                 waiting_station = ticks,
---                 pos = {x,y},
---                 entity = entity
+--                 pos = {x, y},
 --             },
 --             [rail_id .. n] = {...}
 --         },
 --         signals = {
---             [signal_id] = ticks,
---             [signal_id .. n] = ticks,
---             pos = {x,y},
---             entity = entity
+--             [signal_id] = {
+--                 waiting = ticks,
+--                 pos = {x, y},
+--             },
+--             [signal_id .. n] = {...}
 --         },
 --         stations = {
---             [station_id] = ticks,
---             [station_id .. n] = ticks,
---             pos = {x,y},
---             entity = entity
+--             [station_id] = {
+--                 waiting = ticks,
+--                 pos = {x, y},
+--             },
+--             [station_id .. n] = {...}
 --         }
 --     },
 --     max = {
@@ -394,33 +618,13 @@ end
 -- Update train global data
 ----------------------------------------------------------------------------------------------------
 
-local warn_invalid = function(train)
-    -- Save
-    game.auto_save()
-
-    -- Log
-    log('Include all data between DEBUG START and DEBUG END in the bug report')
-    log('===== DEBUG START =====')
-    log('Error on train id: ' .. train.id)
-    -- log('global')
-    -- log(serpent.block(global))
-    log(debug.traceback())
-    log('===== DEBUG END =====')
-
-    -- Inform user
-    game.print("Weird... We ran into an issue while processing train " .. train.id .. " which should not have happened")
-    game.print("An auto save has been generated and detailed information is available in the log")
-    game.print("please report to mod author and include all relevant data for further analysis")
-
-end
-
 local get_rail = function(train, gt)
 
     local rail = train.front_rail
-    if not rail then
-        warn_invalid(train)
-        return
-    end
+    -- if not rail then
+    --     warn_invalid(train)
+    --     return
+    -- end
 
     -- Get rail entry
     if not gt.rails then
@@ -428,10 +632,10 @@ local get_rail = function(train, gt)
     end
     if not gt.rails[rail.unit_number] then
         gt.rails[rail.unit_number] = {
-            pos = rail.position,
-            entity = rail
+            pos = rail.position
         }
     end
+    set_global_entity(rail.unit_number, rail)
     local gtr = gt.rails[rail.unit_number]
 
     return rail, gtr
@@ -473,58 +677,6 @@ local process_train_traveling = function(train, gt)
     gtr.traveling[minute] = (gtr.traveling[minute] or 0) + 1
 end
 
-local process_train_waiting_signal = function(train, gt)
-    -- Get variables
-    local minute = get_minute()
-    local signal = train.signal
-    if not signal then
-        warn_invalid(train)
-        return
-    end
-
-    -- Get signal entry
-    if not gt.signals then
-        gt.signals = {}
-    end
-    if not gt.signals[signal.unit_number] then
-        gt.signals[signal.unit_number] = {
-            pos = signal.position,
-            entity = signal,
-            waiting = {}
-        }
-    end
-
-    -- Update waiting at signal
-    local gts = gt.signals[signal.unit_number]
-    gts.waiting[minute] = (gts.waiting[minute] or 0) + 1
-end
-
-local process_train_waiting_station = function(train, gt)
-    -- Get variables
-    local minute = get_minute()
-    local station = train.station
-    if not station then
-        warn_invalid(train)
-        return
-    end
-
-    -- Get station entry
-    if not gt.stations then
-        gt.stations = {}
-    end
-    if not gt.stations[station.unit_number] then
-        gt.stations[station.unit_number] = {
-            pos = station.position,
-            entity = station,
-            waiting = {}
-        }
-    end
-
-    -- Update waiting at station
-    local gts = gt.stations[station.unit_number]
-    gts.waiting[minute] = (gts.waiting[minute] or 0) + 1
-end
-
 local process_train_waiting_other = function(train, gt)
     -- Get variables
     local minute = get_minute()
@@ -539,6 +691,60 @@ local process_train_waiting_other = function(train, gt)
     end
     gtr.error[minute] = (gtr.error[minute] or 0) + 1
 
+end
+
+local process_train_waiting_signal = function(train, gt)
+    -- Get variables
+    local minute = get_minute()
+    local signal = train.signal
+
+    if signal then
+
+        -- Get signal entry
+        if not gt.signals then
+            gt.signals = {}
+        end
+        if not gt.signals[signal.unit_number] then
+            gt.signals[signal.unit_number] = {
+                pos = signal.position,
+                waiting = {}
+            }
+        end
+        set_global_entity(signal.unit_number, signal)
+
+        -- Update waiting at signal
+        local gts = gt.signals[signal.unit_number]
+        gts.waiting[minute] = (gts.waiting[minute] or 0) + 1
+    else
+        process_train_waiting_other(train, gt)
+    end
+end
+
+local process_train_waiting_station = function(train, gt)
+    -- Get variables
+    local minute = get_minute()
+    local station = train.station
+
+    if station then
+
+        -- Get station entry
+        if not gt.stations then
+            gt.stations = {}
+        end
+        if not gt.stations[station.unit_number] then
+            gt.stations[station.unit_number] = {
+                pos = station.position,
+                waiting = {}
+            }
+        end
+        set_global_entity(station.unit_number, station)
+
+        -- Update waiting at station
+        local gts = gt.stations[station.unit_number]
+        gts.waiting[minute] = (gts.waiting[minute] or 0) + 1
+    else
+        process_train_waiting_other(train, gt)
+    end
 end
 
 local update_trains_on_surface = function(surface_index)
@@ -619,19 +825,22 @@ model.init = function()
         --     gs.overlay = {}
         -- end
     end
+
+    -- Init global entities
+    if not global.entities then
+        global.entities = {}
+    end
 end
 
 -- Global data model
 -- global = {
 --     surfaces = {
---         [surface_id] = {
---             trains = {
+--         [surface_id] = {        trains = {
 --                 [train_id] = {
 --                     last_rail = entity_id, -- Unit number of the track this train was in previous tick
 --                     rails = {
 --                         [rail_entity_id] = {
 --                             position = {x, y},
---                             entity = entity,
 --                             throughput = {
 --                                 [minute] = count,
 --                                 [minute .. n] = count
@@ -650,7 +859,6 @@ end
 --                     signals = {
 --                         [signal_entity_id] = {
 --                             position = {x, y},
---                             entity = entity,
 --                             waiting = {
 --                                 [minute] = tick,
 --                                 [minute .. n] = tick
@@ -661,7 +869,6 @@ end
 --                     stations = {
 --                         [station_entity_id] = {
 --                             position = {x, y},
---                             entity = entity,
 --                             waiting = {
 --                                 [minute] = tick,
 --                                 [minute .. n] = tick
@@ -677,6 +884,10 @@ end
 --             }
 --         },
 --         [surface_id .. n] = {...}
+--     },
+--     entities = {
+--         [unit_number] = LuaEntity,
+--         [unit_number .. n] = LuaEntity
 --     }
 -- }
 

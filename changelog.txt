@@ -1,4 +1,26 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.1.8
+Date: 2024-09-03
+  Changes:
+    - Updated rail block detection logic
+---------------------------------------------------------------------------------------------------
+Version: 0.1.7
+Date: 2024-09-02
+  Bugfixes:
+    - Color whole segment attached to rail signal instead of only the one rail section the signal is connected to
+---------------------------------------------------------------------------------------------------
+Version: 0.1.6
+Date: 2024-09-01
+  Changes:
+    - Added GUI
+    - Bottleneck overlay is toggleable instead of a limited time to live
+    - Added top 20 signals with longest waiting time
+---------------------------------------------------------------------------------------------------
+Version: 0.1.5
+Date: 2024-09-01
+  Bugfixes:
+    - No more generating an error when train waits for station/signal while there is no station/signal
+---------------------------------------------------------------------------------------------------
 Version: 0.1.4
 Date: 2024-08-22
   Bugfixes:
